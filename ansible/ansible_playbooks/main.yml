@@ -1,6 +1,0 @@
----
-- name: reading matrix variables
-  import_playbook: matrix.yml
-- name: Configuring prod switch
-  import_playbook: prod_vswitch.yml
-    

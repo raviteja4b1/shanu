@@ -1,1 +1,0 @@
-Copy /y \\stp-it225\STPDeployments\Oms\Production\DeploymentScripts\InstallScripts\OmsRetailServerDeployments.bat C:\OmsUtilities\InstallScripts

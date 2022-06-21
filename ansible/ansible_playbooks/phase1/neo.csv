@@ -1,7 +1,0 @@
-Name,Value,Type,Description,Notes
-storeNumber,113,int,New store number,Build IPs and store server names
-regMAC,"E070EAA4C6BF,E070EAA4CBA3,E070EAA4C7A9,E070EAA4C5DE,E070EAA4CD74,E070EAA4C5BA",array,List of register MAC addresses,Might put these individually as well as they would be easier for Whalley to input.
-tzSelect,2,int,Time zone setting,Could either convert them to an array later or just leave them.
-hvNew,stp-113hyv1,string,Target hypervisor hostname,
-city,Maple Grove,string,New store city,
-state,MN,string,New store state,Two-letter state abbreviation (MI)
