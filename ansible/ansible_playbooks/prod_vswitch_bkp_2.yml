@@ -1,0 +1,50 @@
+---
+ - name: creating production virtual switch
+   hosts:	all
+   vars:
+    - newVnet: "{{ newVnet }}"
+    - netadapter: "{{ IPnetadapter }}"
+   pre_tasks:
+    - name: reading variables from matrix.yml
+      include_vars:
+       file: matrix.yml
+      register: data
+
+    - name: display data from matrix.yml
+      debug:
+       msg: "{{ newVnet }}"
+
+   tasks:
+    - name: set required variables
+      win_shell: |
+        $newvnet = "{{ newVnet }}"
+        $netadapter = "{{ IPnetadapter }}"
+        $force = "{{ VnetForce }}"
+        $VMAdapter = Get-NetAdapter -Name $netadapter -EA SilentlyContinue
+        #echo " value of VMAdapter before if: $VMAdapter"
+        if (!$VMAdapter) {
+            $VMAdapter = Get-NetAdapter | Where-Object {($_.Status -eq "Up") -and ($_.Name -ne "Embedded LOM 1 Port 1")} | Select-Object -First 1 }
+        
+    - name: create switch 
+      win_shell: |
+        $newvnet = "{{ newVnet }}"
+        $VMAdapter = Get-NetAdapter -Name "{{ netadapter }}" -EA SilentlyContinue
+        $force = "{{ VnetForce }}"
+        echo " value of newvnet: $newvnet | value of VMAdapter: $VMAdapter | value of force: $force "  
+        New-VMSwitch -Name $newvnet -NetAdapterName $VMAdapter.Name -AllowManagementOS $force -ErrorAction Stop
+      register: vswitch_new
+      ignore_errors: yes
+      
+    - debug: 
+       msg: "{{ vswitch_new }}"
+
+    - name: already bound
+      debug:
+       msg: "The network adapter is already being used as a virtual adapter. Specify another adapter of romove the existing network."
+      when: "'already bound' in vswitch_new.msg"
+      register: vswitch_already_bound
+
+    - name: virtual switch was not created successfully
+      debug:
+       msg: "The virtual switch was not created successfully. Please check configuration and try again."
+      when: vswitch_new == false 

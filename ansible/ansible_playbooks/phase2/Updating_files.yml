@@ -1,0 +1,110 @@
+---
+- hosts: all
+  gather_facts: false
+  tasks:
+    - add_host: 
+        host: "{{target_machine}}"
+      when: target_machine is defined
+- name: Configure New App
+  hosts: "{{target_machine | default('all') }}"
+  gather_facts: false
+  vars_files:
+    - ../phase1/phase1_vault.yml
+  vars:
+    ansible_connection: winrm
+    ansible_winrm_server_cert_validation: ignore
+    ansible_ssh_port: 5986
+    ansible_winrm_transport: ntlm
+        
+  tasks: 
+    - name: Install TaxEngine service
+      win_package: 
+        path: C:\OMS\Stp.TaxEngine\InstallTaxEngineService.bat
+        productid: auto
+        arguments: /c
+        state: present
+      
+    # - name: Update Tax Engine
+    #   win_copy:
+    #     src: \\stp-retapp151\C$\OMS\Stp.TaxEngine\*.*
+    #     dest: C:\OMS\Stp.TaxEngine\
+    #     force: yes
+    #     remote_src: True
+    #   become: True
+    #   become_method: runas
+    #   register: updt_taxEng
+
+    # - name: Start Service Stp.TaxEngine.Window
+    #   win_service:
+    #     name:  Stp.TaxEngine.Window
+    #     state: started
+    #   register: strtService
+    #   when: updt_taxEng | changed
+
+    # - name: Stopping default web site on IIS
+    #   win_iis_website:
+    #     name: "Default Web Site"
+    #     state: stopped
+
+    # - name: Updating Promo Files
+    #   win_copy:
+    #     src: \\stp-retapp151\C$\inetpub\wwwroot\PromoService\*.*
+    #     dest: C:\inetpub\wwwroot\PromoService\
+    #     force: yes
+    #     remote_src: True
+    #   become: True
+    #   become_method: runas
+    #   register: updt_PromoFiles
+
+    # - name: Stopping default web site on IIS
+    #   win_iis_website:
+    #     name: "Default Web Site"
+    #     state: started
+      
+    # # Stp Deployment Agent service
+    # - name: Stop Service Stp Deployment Agent
+    #   win_service:
+    #     name:  Stp Deployment Agent
+    #     state: paused
+      
+    # - name: Updating StpDeploymentAgent
+    #   win_copy:
+    #     src: \\stp-retapp151\C$\Program Files (x86)\STP Deployment Agent
+    #     dest: C:\Program Files (x86)\
+    #     force: yes
+    #     remote_src: True
+    #   become: True
+    #   become_method: runas
+    #   register: updt_DepAgent
+
+    # - name: Deleting Deployment agent Files
+    #   win_file:
+    #     path: C:\ProgramData\Sierra Trading Post\Deployment Agent\{{item}}
+    #     state: absent
+    #   loop:
+    #     - AgentState.xml
+    #     - AgentLog.txt
+    #     - ServiceLog.txt
+
+    # - name: Start Service Stp Deployment Agent
+    #   win_service:
+    #     name:  Stp Deployment Agent
+    #     state: started
+
+          
+          
+          
+         
+          
+          
+          
+         
+         
+         
+         
+         
+         
+
+
+                
+        

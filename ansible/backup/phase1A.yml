@@ -1,0 +1,77 @@
+---
+# This play is performed to validate and run initial configuration of the Hyperv
+- name: validtae and configure the hyperv
+  hosts: all
+  vars:
+    ansible_connection: winrm
+    ansible_winrm_server_cert_validation: ignore
+    ansible_user: mpointer
+    ansible_password: Wh2ll3y$t2g4ng
+    ansible_winrm_port: 5986
+  tasks:
+   - name: check ifwinrm is up
+     wait_for:
+       port: 5986
+       timeout: 10
+       host: all
+     register: winrm_available
+     ignore_unreachable: yes
+     ignore_errors: yes
+   - name: check if powershell is 5 
+     win_shell: |
+        [string]$PSVersionTable.PSVersion.Major + "." + [string]$PSVersionTable.PSVersion.Minor
+     register: powershell_version
+     failed_when:
+     - powershell_version.stdout_lines[0] != "5.1" 
+   - name: verify or rename hypervisor
+     win_shell: hostname
+     register: host_name
+   - win_domain_membership:
+       dns_domain_name: STP.LOCAL
+       hostname: "{{ host_name.stdout_lines[0] }}"
+       domain_admin_user: mpointer
+       domain_admin_password: Wh2ll3y$t2g4ng
+       domain_ou_path: "OU='Retail Virtual Hosts',OU=Retail,OU=Servers,DC=STP,DC=LOCAL"
+       state: domain
+     register: domain_state
+   - win_reboot:
+     when: domain_state.reboot_required
+   - name: creating disk F
+     win_partition:
+       drive_letter: F
+       partition_size: 999 GiB
+       disk_number: 1
+   - name: creating disk D
+     win_partition:
+       drive_letter: D
+       partition_size: 5 GiB
+       disk_number: 2
+   - name: Disable Windows firewall  
+     win_firewall:
+       state: disabled
+       profiles:
+       - Domain
+       - Private
+       - Public
+     tags: disabled_firewall
+   - name: Set Hypervisor to autolaunch
+     win_shell: |
+       bcdedit /set hypervisorlaunchtype auto 
+   - name: Verify/activate Window
+     win_product_facts:
+   - debug:
+       msg: 'This Windows is {{ansible_os_license_status}}'    
+---
+#testing all the command through this play
+- name: testing
+  hosts: all
+  vars:
+    ansible_connection: winrm
+    ansible_winrm_server_cert_validation: ignore
+    ansible_user: mpointer
+    ansible_password: Wh2ll3y$t2g4ng
+    ansible_winrm_port: 5986
+  tasks:
+   - name: Set Server Time Zone
+     win_timezone:
+       timezone: Eastern Standard Time

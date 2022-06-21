@@ -1,0 +1,187 @@
+---
+- hosts: all
+  gather_facts: false
+  tasks:
+    - add_host: 
+        host: "{{target_machine}}"
+      when: target_machine is defined
+- name: Installing the Drivers
+  hosts: "{{target_machine | default('all') }}"
+  gather_facts: false
+  vars_files:
+    - ../phase1/phase1_vault.yml
+
+  delegate_to: '{{target_machine | default("all")}}'
+  vars:
+    ansible_connection: winrm
+    ansible_winrm_server_cert_validation: ignore
+    ansible_ssh_port: 5986
+    ansible_winrm_transport: ntlm
+
+    QLnPrintDriverPath: \\stp-it227\App Installs\Drivers\Printer\Zebra\QLn320\ZBRN
+    QLnPrintDriver: "ZDesigner QLn320"
+    QLnPrintDriverTargetPath: C:\Temp\QLN320
+    propertiesPath: "C:\\Temp\retail_pos_install.xml"
+    QLnPrintIP: [array](($dataXml.qlnIP).Split(" "))
+    file: "{{ QLnPrintDriverPath }}\PrinterDriverData.reg"
+    QLnPrintName:
+      - printer1
+      - printer2
+    printers:
+      - Receipt
+      - Slip
+      - Endorse
+  
+  tasks: 
+  - name: Check if the Install-QLnDriver driver exists already.
+    win_shell: |
+       $driverexists = Get-PrinterDriver -Name {{ QLnPrintDriver }} -ErrorAction SilentlyContinue 
+    register: driverexists
+    tag: runcheck
+  - name: Install-QLnDriver tasks
+    block:      
+      - name: Check if install directory exists
+        win_stat:
+            path: {{ QLnPrintDriverTargetPath }}
+        register: stat_result
+             
+      - name: create directory if not exists
+        win_file:
+            path: {{ QLnPrintDriverTargetPath }}
+        state: directory
+        when: not stat_result.stat.exists
+        
+      - name: Copy driver files to local drive
+        win_copy:
+            src: {{ QLnPrintDriverPath }}
+            dest: {{ QLnPrintDriverTargetPath }}
+            
+      - name: Installing QLnDriver driver
+        win_shell: |
+            # Install driver files.
+            Write-Host "Installing driver."
+            pnputil /add-driver "{{ QLnPrintDriverTargetPath }}\ZBRN\ZBRN.inf"
+            # Add driver to driver store.
+            Write-Host "Adding driver to driver store"
+            Add-PrinterDriver -Name "{{ QLnPrintDriver }}"
+            Write-Host "Driver install complete."
+            Remove-Item "{{ QLnPrintDriverTargetPath }}\" -Recurse -Force
+    when: not driverexists.changed
+    
+  # - name: Install QLnPrinter tasks
+  #   block:      
+  #     - name: Check QLnPrinterExists exists 
+  #       win_shell: |
+  #           $QLnPrinterExists = Get-CimInstance win32_printer -Filter "name LIKE '{{ item0 }}'" -ErrorAction SilentlyContinue
+  #       register: QLnPrinterExists
+  #     - name: Check printer port exists 
+  #       win_shell: |
+  #           $portExists = Get-Printerport -Name {{ item1 }} -ErrorAction SilentlyContinue
+  #       register: portExists
+  #     - name: Create and add printer port
+  #       block:
+  #         - name: add printer port if not exists
+  #           win_shell: |
+  #               Add-PrinterPort -name {{ item1 }} -PrinterHostAddress {{ item1 }} -ErrorAction Stop
+  #           register: addportresult
+  #           debug:
+  #             msg: {{ addportresult }}
+  #       rescue:
+  #         - name: print catch msg
+  #           fail: 
+  #             msg: "Printer port was not added successfully. Check your values and try again."
+  #       when: not QLnPrinterExists.changed and not portExists.changed
+        
+  #     - name: check QLnDriver exists
+  #       win_shell: |
+  #           Add-Printer -Name {{ item0 }} -PortName {{ item1 }} -DriverName {{ QLnPrintDriver }}
+  #       when: driverexists.changed
+  #       tag: runcheck
+  #     - name: print catch msg
+  #       fail: 
+  #         msg: "Driver installation was not successful!"
+  #       when: not driverexists.changed
+        
+  #     - name: Check that printers were installed
+  #       win_shell: |
+  #           $QLnPrintObj = Get-CimInstance win32_printer -Filter "name LIKE '{{ item }}'"
+  #       register: printerInstalled
+
+  #     - name: Checking if QLnPrinter was installed.
+  #       debug: 
+  #         msg: "Printer $QLnPrinter was installed successfully."
+  #       when: printerInstalled.changed
+        
+  #     - name: if QLnPrinter not instllad
+  #       fail: 
+  #         msg: "$QLnPrinter was not installed correctly. Please configure manually."
+  #       when: not printerInstalled.changed
+  #   with_together: 
+  #       - {{ QLnPrintName }}
+  #       - {{ QLnPrintIP }}
+        
+  # - name: Install QLnRegSetting tasks
+  #   block:      
+  #     - name: Load the .NET module for file selection window
+  #       win_shell: |
+  #            if ($false) {
+  #               # Load the .NET module for file selection window
+  #               Add-Type -AssemblyName System.Windows.Forms
+  #               # Open a file selection window and allow user to select .reg file.
+  #               $FileBrowser = New-Object System.Windows.Forms.OpenFileDialog -Property @{ 
+  #                   InitialDirectory = [Environment]::GetFolderPath('Desktop') 
+  #                   Filter = 'Registry Settings (*.reg)|*.reg'
+  #                   Multiselect = $false
+  #               }
+  #               # Open the window
+  #               $null = $FileBrowser.ShowDialog()
+  #               $file = $FileBrowser.FileNames
+  #            } else {
+  #               # Set to default if custom settings aren't required.
+  #               $file = "{{ file }}"
+  #            }
+  #       register:
+        
+  #     - name: Copy registry file to local
+  #       win_copy:
+  #           src: {{ file }}
+  #           dest: C:\Temp\PrinterDriverData.reg
+  #     - name: 
+  #       win_shell: |
+  #           # Load file for editing.
+  #           $regSettings = Get-Content "C:\Temp\PrinterDriverData.reg" #-Encoding utf32
+  #           foreach ($QLnPrinter in {{ QLnPrintName }}) {
+  #               Write-Host "Importing custom print settings for $QLnPrinter."
+  #               # Replace old printer name with current printer and save file.
+  #               $regSettingsCustom = ($regSettings).Replace("\Printers\F474\PrinterDriverData","\Printers\$QLnPrinter\PrinterDriverData")
+  #               $regSettingsCustom | Out-File "C:\Temp\PrinterDriverData-$QLnPrinter.reg"
+  #               # Merge the registry data.
+  #               try {
+  #                   Invoke-Command {reg import "C:\Temp\PrinterDriverData-$QLnPrinter.reg"} -ErrorAction Stop
+  #                   Remove-Item "C:\Temp\PrinterDriverData-$QLnPrinter.reg" -Force
+  #               } catch {
+  #               }    
+  #           }
+  #       register:
+        
+  # - name: Remove file if present
+  #   win_file:
+  #       path: C:\Temp\PrinterDriverData.reg
+  #       state: absent
+  
+  # - name: Manually imports the registry-based settings for the mobile label printers
+  #   block:      
+  #     - name: get ReceiptPrinter
+  #       win_shell: |
+  #           $printers = "Receipt","Slip","Endorse"
+  #           foreach ($printer in $printers) {
+  #               $receiptPrinterExists = Get-CimInstance win32_printer -Filter "name LIKE '$printer'" -ErrorAction SilentlyContinue
+  #               if ($receiptPrinterExists) {
+  #                   Write-Host "$printer printer is installed on this machine."
+  #                   if (!($receiptPrinterExists.Shared -and $receiptPrinterExists.Published)) {
+  #                       Get-Printer $printer | Set-Printer -Published:$true -Shared:$true -ShareName:$printer -RenderingMode:SSR
+  #                   }
+  #               } else {
+  #                   Write-Host -BackgroundColor Red "$printer printer is not installed. Please install manually."
+  #               }
+  #           }

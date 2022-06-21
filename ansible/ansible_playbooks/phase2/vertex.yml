@@ -1,0 +1,120 @@
+---
+- hosts: all
+  gather_facts: false
+  tasks:
+    - add_host: 
+        host: "{{target_machine}}"
+      when: target_machine is defined
+- name: Install Vertex9
+  hosts: "{{target_machine | default('all') }}"
+  gather_facts: false
+  vars_files:
+    - ../phase1/phase1_vault.yml
+      
+  tasks:       
+   - name: read the neo.csv
+     read_csv: 
+       path: /root/ansible/ansible_playbooks/phase1/neo.csv
+       key: Name
+     register: neo
+     delegate_to: localhost 
+   
+   - name: Installation of Vertex process
+     block:
+      #  - name: copying vertex jar 
+      #    win_copy:
+      #      src: "{{ installSource }}{{item}}"
+      #      dest: "{{ installDest }}"
+      #      force: yes
+      #      remote_src: True
+      #    become: True
+      #    become_method: runas
+      #    loop:
+      #     - vertex-o-series-pos-install-9.0.0.0.321.jar
+      #     - retail_install.properties
+        
+       - name: check java location and install vertex
+         win_shell: |
+          $installProperties = Get-Content "{{installDest}}retail_install.properties" -Encoding utf8
+
+          try {
+              $jreFolders = Get-ChildItem "C:\Program Files\Java" -ErrorAction Stop
+          } catch {
+              Write-Host "64-bit version not found, checking for 32-bit."
+              $jreFolders = Get-ChildItem "C:\Program Files (x86)\Java"
+          }
+
+          if ($jreFolders) {
+              $jreLatest = $jreFolders | Sort-Object | Select-Object -Last 1
+          } else {
+              Write-Error "Java location not found."
+              break
+          }
+
+      #  - name: vertex status
+      #    win_service: 
+      #      name: vertexexpos90
+      #    register: vertexexpos90
+      #  - debug: 
+      #      msg: "{{vertexexpos90}}"
+      #  - name: Stop Service vertexpos90
+      #    win_service:
+      #      name:  vertexpos90
+      #      state: paused
+      #    when: "{{ vertexpos90.stdout_lines.status }} == Running"
+         
+      #  - name: copying vertex jar 
+      #    win_copy:
+      #      src: "{{ installSource }}vertex-o-series-pos-patch-9.0.1.2.4.jar"
+      #      dest: "{{ installDest }}\Patch\"
+      #      force: yes
+         
+      #  - name: run vertex jar
+      #    win_shell: |
+      #       & java -jar "vertex-o-series-pos-patch-9.0.1.2.4.jar
+         
+      #  - name: Start Service vertexpos90
+      #    win_service:
+      #      name:  vertexpos90
+      #      state: started
+           
+      #  - name: Updating Vertex 
+      #    win_shell: |
+      #       java -jar D:\vertex\oseries-pos\tools\store_location_update.jar 0$($StoreNumber)
+         
+      #  - name: Install Deployment Agent
+      #    win_package:
+      #       path: C:\Temp\StpDeploymentAgent.msi
+      #       arguments: /package
+      #       state: present
+     delegate_to: '{{target_machine | default("all")}}'
+     vars:
+       ansible_connection: winrm
+       ansible_winrm_server_cert_validation: ignore
+       ansible_ssh_port: 5986
+       ansible_winrm_transport: ntlm
+       regMAClist: "{{ neo.dict.regMAC.Value.split(',') }}"
+       installSource: \\stp-it225\STPDeployments\Vertex9\install\
+       installDest: D:\\vertex\oseries9-pos\
+       installProperties: D:\\vertex\oseries9-pos\retail_install.properties
+       storeNumber: "{{store_number}}"
+      
+           
+           
+           
+    
+         
+         
+         
+       
+         
+         
+         
+         
+
+       
+ 
+
+       
+        
+    

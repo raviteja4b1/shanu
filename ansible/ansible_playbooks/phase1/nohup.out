@@ -1,0 +1,17 @@
+ERROR! the playbook: exportvm.yml could not be found
+ERROR! the playbook: exportvm.yml could not be found
+
+PLAY [all] *********************************************************************
+
+TASK [add_host] ****************************************************************
+changed: [10.1.74.xx]
+
+PLAY [Exporting images on Gold Hyper-v] ****************************************
+
+TASK [Gathering Facts] *********************************************************
+fatal: [10.1.74.5]: UNREACHABLE! => {"changed": false, "msg": "ntlm: auth method ntlm requires a username", "unreachable": true}
+
+PLAY RECAP *********************************************************************
+10.1.74.5                  : ok=0    changed=0    unreachable=1    failed=0    skipped=0    rescued=0    ignored=0   
+10.1.74.xx                 : ok=1    changed=1    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   
+

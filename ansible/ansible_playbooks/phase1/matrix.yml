@@ -1,0 +1,10 @@
+---
+- hosts: localhost
+  tasks:
+  - name: read the matrix.csv
+    read_csv: 
+      path: /root/ansible/ansible_playbooks/matrix.csv
+      key: Name
+    register: matrix
+  - debug: 
+      msg: '{{matrix}}'

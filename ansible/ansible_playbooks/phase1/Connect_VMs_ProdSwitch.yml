@@ -1,0 +1,46 @@
+---
+- hosts: all
+  gather_facts: false
+  tasks:
+    - add_host: 
+        host: '{{target_machine}}'
+      when: target_machine is defined
+
+- name: refresh virtual machines
+  hosts: '{{target_machine | default("all")}}'
+  gather_facts: true
+  vars_files:
+    - phase1_vault.yml
+  vars:
+    ansible_winrm_server_cert_validation: ignore
+    ansible_ssh_port: 5986
+    ansible_winrm_transport: ntlm
+    ansible_connection: winrm
+    store_number: "{{store_number}}"
+    local_pass: "{{password}}"  
+  tasks: 
+       - name: Connect virtual machines to the Vswitch
+         win_shell: Get-VM "{{ item }}" | Get-VMNetworkAdapter | Connect-VMNetworkAdapter -SwitchName "Sierra-VS1"
+         loop:
+         - 'stp-{{store_number}}app1'
+         - 'stp-{{store_number}}adc1'
+         - 'stp-"{{store_number}}"sql1'
+       - name: create Temp directory
+         win_file:
+          path: C:\Temp
+          state: directory       
+       - name: Copy configure remote Desktop file
+         win_copy:
+          src: ./ConfigureRemotingForAnsible.ps1
+          dest: C:\Temp\ConfigureRemotingForAnsible.ps1
+       - name: enabling remote desktop on vm's
+         win_shell: 
+          $pass = ConvertTo-SecureString '{{password}}' -AsPlainText -Force;
+          $Cred = New-Object System.Management.Automation.PSCredential ('administrator', $pass );
+          Invoke-Command -VMName {{item}} -Credential $Cred -ScriptBlock {Get-NetIPAddress -IPAddress 10.1.*.* | Select-Object PSComputerName, IPv4Address};
+          Invoke-Command -VMName {{item}} -Credential $Cred -FilePath 'C:\Temp\ConfigureRemotingForAnsible.ps1'
+
+         loop:
+         - 'stp-{{store_number}}app1'
+         - 'stp-{{store_number}}adc1'
+         - 'stp-"{{store_number}}"sql1'

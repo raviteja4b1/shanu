@@ -1,0 +1,89 @@
+---
+# This play is performed to validate and run initial configuration of the Hyperv
+- name: validate and configure the hyperv
+  hosts: win
+  tasks:
+   - name: check ifwinrm is up
+     wait_for:
+       port: 5986
+       timeout: 10
+       host: win
+     register: winrm_available
+     ignore_unreachable: yes
+     ignore_errors: yes
+   - name: check if powershell version is 5 
+     win_shell: |
+        [string]$PSVersionTable.PSVersion.Major + "." + [string]$PSVersionTable.PSVersion.Minor
+     register: powershell_version
+     failed_when:
+     - powershell_version.stdout_lines[0] != "5.1"
+   - debug: 
+       msg: '{{stp_user}}'
+   - name: Join computer to domain
+     win_domain_membership:
+       dns_domain_name: STP.LOCAL
+       hostname: "{{hostname}}"
+       domain_admin_user: "{{stp_user}}"
+       domain_admin_password: "{{stp_pass}}"
+       domain_ou_path: "OU=Retail Virtual Hosts,OU=Retail,OU=Servers,DC=STP,DC=LOCAL"
+       state: domain
+     register: domain_state
+   - win_reboot:
+     when: domain_state.reboot_required
+   - name: Get Disk facts
+     win_disk_facts:
+   - name: creating disk F
+     win_partition:
+       drive_letter: F
+       partition_size: -1
+       partition_number: 1
+       disk_number: 1
+     when: ansible_disks[disk_number].guid is none
+   - name: Format the partition F as NTFS and label it
+     win_format:
+       drive_letter: F
+       file_system: NTFS
+       new_label: Data
+     when: ansible_disks[disk_number].guid is none
+  #  - name: creating disk D
+  #    win_partition:
+  #      drive_letter: D
+  #      partition_size: '5 TiB'
+  #      disk_number: 1
+  #  - name: Format the partition D as NTFS and label it
+  #    win_format:
+  #      drive_letter: D
+  #      file_system: NTFS
+  #      new_label: Data
+   - name: Disable Windows firewall  
+     win_firewall:
+       state: disabled
+       profiles:
+       - Domain
+       - Private
+       - Public
+     tags: disabled_firewall
+   - name: Set Hypervisor to autolaunch
+     win_shell: |
+       bcdedit /set hypervisorlaunchtype auto 
+   - name: Verify/activate Window
+     win_product_facts:
+   - debug:
+       msg: 'This Windows is {{ansible_os_license_status}}'    
+   - name: Set Server Time Zone
+     win_timezone:
+       timezone: Eastern Standard Time
+   - name: create directories for hyper-v
+     win_file:
+       path: "{{ item }}"
+       state: directory
+     loop:
+       - F:\Hyper-V\Virtual Hard Disks
+       - F:\Hyper-V\Virtual Machines
+   - name: Set VM Path
+     win_shell: |
+       Set-VMHost -VirtualHardDiskPath "F:\Hyper-V\Virtual Hard Disks" -VirtualMachinePath "F:\Hyper-V\Virtual Machines"
+       Set-VMHost -EnableEnhancedSessionMode $True
+     register: set_path
+   - debug:
+       msg: "{{ set_path }}"

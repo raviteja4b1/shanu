@@ -1,0 +1,129 @@
+---
+- name: Configure New App
+  hosts: 10.1.74.61
+
+  pre-tasks:
+    - name: read the matrix.csv
+      read_csv: 
+        path: /root/ansible/ansible_playbooks/matrix.csv
+        key: Name
+      register: matrix
+      vars:
+        serverlist: "{{ matrix.dict.serverListNew.Value.split(',') }}"  
+        
+    - name: read the neo.csv
+      read_csv: 
+        path: /root/ansible/ansible_playbooks/neo.csv
+        key: Name
+      register: neo
+      vars:
+        regMAClist: "{{ neo.dict.regMAC.Value.split(',') }}"
+        
+  tasks: 
+    - name: New store app server setup
+      block:
+        - name: get .net current version
+          win_reg_stat:
+            path: Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full
+            name: Release
+          register: netVersion
+          
+        - name: not installed message
+          debug:
+            msg: ".NET 4.8 or greater is not installed. Beginning install process."
+          when: ( netVersion.stdout <= 528040 )
+          
+        - name: already installed message
+          fail:
+            msg: ".NET 4.8 or greater is installed already."
+          when: ( netVersion.stdout >= 528040 )
+          
+        - name: get osVersion
+          win_reg_stat:
+            path: HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion
+            name: ReleaseId
+          register: osVersion
+          
+        - name: .net not supported messages
+          fail:
+            msg: ".NET 4.8 is not supported on Windows 10 versions prior to 1607 Please update Windows and try again."
+          when: ( osVersion.stdout <= 1607 )
+         
+        - name: create tempPath dir
+          win_file:
+            path: {{ matrix.dict.tempPath.Value }}
+            state: directory
+          when: ( matrix.dict.tempPath.Value is defined )
+        
+        - name: copy ndp48-web to tempPath
+          win_robocopy:
+            src: $assetPath\ndp48-web.exe
+            dest: {{ matrix.dict.tempPath.Value }}\ndp48-web.exe
+            flags: /E /R:10 /W:60 /TBD /MT:4 /TEE /B /COPY:DT /J
+            remote_src: True
+          become: True
+          become_method: runas
+          become_flags: logon_type=new_credentials logon_flags=netcredentials_only 
+          vars:
+            ansible_become_user: stp\anv00011STP
+            
+        - name: install .NET
+          win_package:
+            path: {{  matrix.dict.tempPath.Value }}\ndp48-web.exe
+            arguments: /q
+            state: present
+          become: True
+          become_method: runas
+          become_flags: logon_type=new_credentials logon_flags=netcredentials_only
+          register: instDotNet
+            
+        - name: gte netVersion
+          win_reg_stat:
+            path: Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full
+            name: Release
+          register: installedNetVersion       
+        
+        - name: create tempPath dir
+          win_file:
+            path: {{ matrix.dict.tempPath.Value }}\ndp48-web.exe
+            state: absent
+          when: ( installedNetVersion.stdout <= 528040 )
+          
+        - name: print messages
+          fail:
+            msg: ".NET 4.8 was not installed successfully.Please try again manually.."
+          when: ( installedNetVersion.stdout <= 528040 ) 
+         
+        - name: print messages
+          debug:
+            msg: ".NET was installed succesfully. Proceeding with setup"
+          when: ( installedNetVersion.stdout >= 528040 ) 
+          
+      #  - name: Import existing pfx certificate that is password protected
+      #    win_certificate_store:
+      #      path: /root/ansible/ansible_playbooks/AppOmsRetail.pfx
+      #      state: present
+      #      password: add password here
+      #    become: yes
+      #    become_method: runas
+      #    register: omsInfo
+          
+        - name: Install App OMSCert
+          win_shell: |
+            # Test whether the cert exists already before adding.
+            $omsInfo = Get-PfxData -FilePath "/root/ansible/ansible_playbooks/AppOmsRetail.pfx" -Password $credOms.Password
+            $omsExists = (Get-ChildItem -Path Cert:\LocalMachine\My | Where-Object {$_.Thumbprint -eq $omsInfo.OtherCertificates.Thumbprint}).Count
+            if ($omsExists -lt 1) {
+              # Copy certificate
+              if (!(Test-Path $tempPath)) {
+                mkdir $tempPath
+              }
+              Copy-Item "/root/ansible/ansible_playbooks/AppOmsRetail.pfx" "$tempPath\AppOmsRetail.pfx"
+              # Install to personal store
+              Import-PfxCertificate -FilePath "$tempPath\AppOmsRetail.pfx" -CertStoreLocation Cert:\LocalMachine\My -Password $credOms.Password
+              Write-Host "OMS Retail certificate installed."
+            } else {
+              Write-Host "OMS Retail certificate is already installed."
+            }    
+          register: instAppOmsCert
+          

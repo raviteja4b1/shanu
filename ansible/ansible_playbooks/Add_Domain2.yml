@@ -1,0 +1,74 @@
+---
+- name: Join server to specified domain
+  hosts: 10.1.74.53
+
+  vars:
+      ansible_connection: winrm
+      ansible_winrm_server_cert_validation: ignore
+      ansible_ssh_port: 5986
+      ansible_winrm_transport: ntlm
+      
+  pre-tasks:
+  #  - name: include variables
+  #    include_vars:
+  #      file:   global-vars/matrix.yml
+  #    ignore_errors: yes
+  #    no_log: true
+    - name: read the matrix.csv
+      read_csv: 
+        path: /root/ansible/ansible_playbooks/matrix.csv
+        key: Name
+      register: matrix
+      delegate_to: localhost
+      
+      vars:
+        serverlist: "{{ matrix.dict.serverListNew.Value.split(',') }}"  
+  tasks:         
+    - name: Join server domain for sql
+      win_domain_membership:
+        dns_domain_name: STP.LOCAL
+        hostname: "{{ item }}"
+        domain_admin_user: "{{stp_user}}"
+        domain_admin_password: "{{stp_pass}}"
+        domain_ou_path: "OU=Retail SQL,OU=Retail,OU=Servers,DC=STP,DC=LOCAL"
+        state: domain 
+      when: item.find('sql') != -1  
+      with_items: "{{ serverlist }}"
+      ignore_errors: yes
+      register: joinsqlservers
+      
+    - name: Join server domain for app
+      win_domain_membership:
+        dns_domain_name: STP.LOCAL
+        hostname: "{{ item }}"
+        domain_admin_user: "{{stp_user}}"
+        domain_admin_password: "{{stp_pass}}"
+        domain_ou_path: "OU=Retail OMS App Servers,OU=Retail,OU=Servers,DC=STP,DC=LOCAL"
+        state: domain 
+      when: item.find('app') != -1  
+      with_items: "{{ serverlist }}"
+      ignore_errors: yes
+      register: joinappservers
+      
+    - name: Join server domain for adc
+      win_domain_membership:
+        dns_domain_name: STP.LOCAL
+        hostname: "{{ item }}"
+        domain_admin_user: "{{stp_user}}"
+        domain_admin_password: "{{stp_pass}}"
+        domain_ou_path: "OU=Whalley Staging,OU=Retail,OU=Servers,DC=STP,DC=LOCAL"
+        state: domain 
+      when: item.find('adc') != -1  
+      with_items: "{{ serverlist }}"
+      ignore_errors: yes
+      register: joinadcservers
+    
+    - name: Wait for VM to shut down
+      wait_for:
+        timeout: 30
+      register: sleep_30
+      
+    - name: Set Server Time Zone
+      win_timezone:
+       timezone: Eastern Standard Time
+         

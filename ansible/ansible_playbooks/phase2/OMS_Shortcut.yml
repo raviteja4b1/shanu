@@ -1,0 +1,60 @@
+---
+- hosts: all
+  gather_facts: false
+  tasks:
+    - add_host: 
+        host: "{{target_machine}}"
+      when: target_machine is defined 
+- name: Create Desktop Shortcuts
+  hosts: "{{target_machine | default('all') }}"
+  gather_facts: false
+  vars_files:
+    - ../phase1/phase1_vault.yml
+
+  tasks: 
+    - name: read the matrix.csv
+      read_csv: 
+        path: /root/ansible/ansible_playbooks/phase1/matrix.csv
+        key: Name
+      register: matrix
+      delegate_to: localhost  
+    - name: Create Desktop Shortcuts main OMS
+      block:
+       - name: Copying shortcut icon's
+         win_copy: 
+           src: "{{ assetpath }}{{item}}"
+           dest: "{{ datapath }}{{item}}"
+           remote_src: True
+         become: True
+         become_method: runas
+         loop:
+           - sierra-retail.ico
+           - sierra-training.ico
+
+       - name: Create an application shortcut on the desktop
+         win_shortcut:
+           src: C:\OMS\OMS.Deployment\Oms.application
+           dest: C:\Users\Public\Desktop\OMS.lnk
+           icon: "{{ datapath }}\\sierra-retail.ico"
+
+       - name: Create an application shortcut on the desktop Retail 
+         win_shortcut:
+           src: C:\OMS\OMS.Deployment\RetailOms.application
+           dest: C:\Users\Public\Desktop\Retail OMS.lnk
+           icon: "{{ datapath }}\\sierra-retail.ico"
+ 
+       - name: Create an application shortcut on the desktop Retail Training
+         win_shortcut:
+           src: C:\OMS\OMS.Deployment\TrainingOms.application
+           dest: C:\Users\Public\Desktop\Retail Training OMS.lnk
+           icon: "{{ datapath }}\\sierra-training.ico"
+      delegate_to: '{{target_machine | default("all")}}'
+      vars:
+        ansible_connection: winrm
+        ansible_winrm_server_cert_validation: ignore
+        ansible_ssh_port: 5986
+        ansible_winrm_transport: ntlm
+        datapath: "{{ matrix.dict.data.Value }}"
+        assetpath: \\stp-it227\IT\Retail Stores\powershell_scripts\Assets\          
+
+           

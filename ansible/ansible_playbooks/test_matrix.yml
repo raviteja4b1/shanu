@@ -1,0 +1,13 @@
+---
+ - name: read variables from matrix
+   hosts: all
+   gather_facts: true
+   vars_files:
+     - matrix.yml
+   vars:
+     serverlist: "{{ serverListNew.split(',') }}"
+   tasks:
+    - name: print variable from matrix
+      debug:
+         msg: "This is server {{ item }} from the list"
+      loop: "{{ serverlist }}"

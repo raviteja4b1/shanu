@@ -1,0 +1,48 @@
+---
+- hosts: all
+  gather_facts: false
+  tasks:
+    - add_host: 
+        host: '{{target_machine}}'
+      when: target_machine is defined
+# This play is performed to validate and run initial configuration of the Hyperv
+- name: validate and configure the hyperv
+  hosts: '{{target_machine | default("all")}}'
+  gather_facts: false
+  vars_files:
+    - phase1_vault.yml
+  vars:
+    ansible_connection: winrm
+    ansible_winrm_server_cert_validation: ignore
+    ansible_ssh_port: 5986
+    ansible_winrm_transport: ntlm
+  tasks: 
+  - name: create folder for \Modules
+    win_file:
+     path: C:\Modules
+     state: directory
+  - name: Install Nuget
+    win_psmodule:
+     name: PowerShellModule
+     state: present
+  - name: Update Modules
+    win_psmodule:
+     name: '{{item}}'
+     state: latest
+    loop:
+     - PowerShellGet
+     - PackageManagement
+  - name: Download HPEiLOCmdlets
+    win_get_url:
+     url: https://psg-prod-eastus.azureedge.net/packages/hpeilocmdlets.3.0.0.nupkg
+     dest: C:\Modules\hpeilocmdlets.3.0.0.nupkg
+  - name: Install HPEiLOCmdlets
+    win_shell: |
+     Register-PSRepository -Name PSRepo -SourceLocation C:\Modules -InstallationPolicy Trusted
+     Install-Module -Name HPEiLOCmdlets -Repository PSRepo -AllowClobber -AcceptLicense
+  - name: List of Installed Modules
+    win_shell: |
+     Get-InstalledModule
+    register: module_list
+  - debug:
+     msg: '{{ module_list.stdout }}'
